@@ -1,0 +1,46 @@
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
+*.pyd
+env/
+venv/
+ENV/
+*.env
+.venv/
+backend/venv/
+
+# SQLite DB
+backend/agentwatch.db
+
+# VS Code
+.vscode/
+
+# Node
+node_modules/
+frontend/node_modules/
+frontend/dist/
+
+# Logs
+*.log
+npm-debug.log*
+
+# MacOS
+.DS_Store
+
+# Python packaging
+*.egg-info/
+
+# Coverage
+coverage/
+htmlcov/
+
+# IDE
+.idea/
+
+# Temporary
+tmp/
+
+# Screenshots
+screenshots/*.svg
+# keep PNG screenshots
