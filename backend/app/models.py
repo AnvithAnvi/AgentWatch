@@ -10,6 +10,7 @@ class Project(Base):
     id = Column(Integer, primary_key=True, index=True)
     name = Column(String, unique=True, index=True, nullable=False)
     api_key = Column(String, unique=True, index=True, nullable=False)
+    retention_days = Column(Integer, default=90)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     runs = relationship("Run", back_populates="project")
@@ -22,7 +23,7 @@ class Evaluation(Base):
 
     score = Column(Integer, nullable=False)
     label = Column(String, nullable=False)
-    reason = Column(Text, nullable=True)
+    meta_json = Column("metadata", Text, nullable=True)
 
     has_error = Column(String, default="false")
     latency_warning = Column(String, default="false")
@@ -46,6 +47,10 @@ class Run(Base):
     model = Column(String, nullable=True)
     latency_ms = Column(Integer, nullable=True)
     cost_usd = Column(String, nullable=True)
+    trace_id = Column(String, nullable=True)
+    host = Column(String, nullable=True)
+    pid = Column(Integer, nullable=True)
+    meta_json = Column("metadata", Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 
@@ -69,6 +74,11 @@ class Span(Base):
     status = Column(String, default="success")
     latency_ms = Column(Integer, nullable=True)
     error_message = Column(Text, nullable=True)
+    parent_span_id = Column(Integer, nullable=True)
+    trace_id = Column(String, nullable=True)
+    host = Column(String, nullable=True)
+    pid = Column(Integer, nullable=True)
+    meta_json = Column("metadata", Text, nullable=True)
 
     created_at = Column(DateTime, default=datetime.utcnow)
 

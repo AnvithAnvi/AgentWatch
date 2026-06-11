@@ -301,6 +301,97 @@ pre {
 
 .latency { color: #6b7280; font-weight: 700; }
 
+.workflow-steps {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.workflow-step {
+  display: grid;
+  grid-template-columns: 42px 1fr;
+  gap: 14px;
+  position: relative;
+  padding: 18px;
+  border: 1px solid #e5e7eb;
+  border-radius: 16px;
+  background: #fafafa;
+}
+
+.workflow-step:not(:last-child)::after {
+  content: "";
+  position: absolute;
+  left: 27px;
+  top: calc(100% - 4px);
+  height: 22px;
+  width: 2px;
+  background: #e5e7eb;
+}
+
+.workflow-index {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #e5e7eb;
+  color: #111827;
+  font-weight: 700;
+}
+
+.workflow-body {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.workflow-title {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  align-items: flex-start;
+}
+
+.workflow-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: center;
+  color: #4b5563;
+  font-size: 13px;
+}
+
+.workflow-flag {
+  display: inline-flex;
+  align-items: center;
+  padding: 4px 10px;
+  border-radius: 999px;
+  background: #fef2f2;
+  color: #b91c1c;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.workflow-error {
+  border-color: #fca5a5;
+  background: linear-gradient(90deg, rgba(254, 226, 226, 0.8), rgba(250, 242, 242, 0.7));
+}
+
+.workflow-persistent {
+  border-color: #fbbf24;
+  background: linear-gradient(90deg, rgba(254, 243, 199, 0.8), rgba(255, 250, 235, 0.7));
+}
+
+.error-summary {
+  margin-bottom: 16px;
+  padding: 14px 16px;
+  border-radius: 14px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  color: #991b1b;
+}
+
 .error {
   color: #b91c1c;
 }

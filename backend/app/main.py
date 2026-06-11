@@ -3,7 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from app.database import Base, engine
 from app import models
-from app.routes import projects, runs, spans
+from app.routes import projects, runs, spans, admin
 
 Base.metadata.create_all(bind=engine)
 
@@ -24,6 +24,7 @@ app.add_middleware(
 app.include_router(projects.router)
 app.include_router(runs.router)
 app.include_router(spans.router)
+app.include_router(admin.router)
 
 
 @app.get("/")

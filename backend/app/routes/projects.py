@@ -24,7 +24,8 @@ def create_project(project: schemas.ProjectCreate, db: Session = Depends(get_db)
 
     new_project = models.Project(
         name=project.name,
-        api_key=api_key
+        api_key=api_key,
+        retention_days=project.retention_days
     )
 
     db.add(new_project)

@@ -7,12 +7,14 @@ from datetime import datetime
 
 class ProjectCreate(BaseModel):
     name: str
+    retention_days: Optional[int] = 90
 
 
 class ProjectResponse(BaseModel):
     id: int
     name: str
     api_key: str
+    retention_days: int
     created_at: datetime
 
     class Config:
@@ -29,6 +31,11 @@ class SpanCreate(BaseModel):
     status: Optional[str] = "success"
     latency_ms: Optional[int] = None
     error_message: Optional[str] = None
+    parent_span_id: Optional[int] = None
+    trace_id: Optional[str] = None
+    host: Optional[str] = None
+    pid: Optional[int] = None
+    meta_json: Optional[str] = None
 
 
 class SpanResponse(BaseModel):
@@ -41,6 +48,11 @@ class SpanResponse(BaseModel):
     status: str
     latency_ms: Optional[int] = None
     error_message: Optional[str] = None
+    parent_span_id: Optional[int] = None
+    trace_id: Optional[str] = None
+    host: Optional[str] = None
+    pid: Optional[int] = None
+    meta_json: Optional[str] = None
     created_at: datetime
 
     class Config:
@@ -50,10 +62,14 @@ class SpanResponse(BaseModel):
 # ---------- Run Schemas ----------
 
 class RunCreate(BaseModel):
-    project_id: int
+    project_id: Optional[int] = None
     run_name: str
     input_text: Optional[str] = None
     model: Optional[str] = None
+    trace_id: Optional[str] = None
+    host: Optional[str] = None
+    pid: Optional[int] = None
+    meta_json: Optional[str] = None
 
 
 class RunComplete(BaseModel):
@@ -73,6 +89,10 @@ class RunResponse(BaseModel):
     model: Optional[str] = None
     latency_ms: Optional[int] = None
     cost_usd: Optional[str] = None
+    trace_id: Optional[str] = None
+    host: Optional[str] = None
+    pid: Optional[int] = None
+    meta_json: Optional[str] = None
     latest_evaluation_label: Optional[str] = None
     latest_evaluation_score: Optional[int] = None
     created_at: datetime

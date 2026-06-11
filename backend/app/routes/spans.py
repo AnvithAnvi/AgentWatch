@@ -31,7 +31,12 @@ def create_span(
         output_json=span.output_json,
         status=span.status,
         latency_ms=span.latency_ms,
-        error_message=span.error_message
+        error_message=span.error_message,
+        parent_span_id=span.parent_span_id,
+        trace_id=span.trace_id,
+        host=span.host,
+        pid=span.pid,
+        meta_json=span.meta_json
     )
 
     db.add(new_span)

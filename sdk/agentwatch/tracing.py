@@ -1,5 +1,10 @@
 import json
 import time
+import os
+import socket
+import uuid
+import functools
+import traceback
 from typing import Optional, Dict, Any
 
 
@@ -20,14 +25,21 @@ class TraceRun:
         self.start_time = None
         self.output_text = None
         self.status = "success"
+        self._meta = None
 
     def __enter__(self):
         self.start_time = time.time()
+        # capture basic host/process metadata for this run before creating it
+        self._meta = self._collect_runtime_metadata()
 
         run = self.client.create_run(
             run_name=self.run_name,
             input_text=self.input_text,
-            model=self.model
+            model=self.model,
+            trace_id=self._meta.get("trace_id"),
+            host=self._meta.get("host"),
+            pid=self._meta.get("pid"),
+            meta_json=json.dumps(self._meta)
         )
 
         self.run_id = run["id"]
@@ -70,8 +82,17 @@ class TraceRun:
         latency_ms: Optional[int] = None,
         error_message: Optional[str] = None
     ):
-        input_json = json.dumps(input_data) if input_data is not None else None
-        output_json = json.dumps(output_data) if output_data is not None else None
+        def safe_serialize(obj):
+            try:
+                return json.dumps(obj)
+            except Exception:
+                try:
+                    return json.dumps({"repr": repr(obj)})
+                except Exception:
+                    return json.dumps({"error": "unserializable"})
+
+        input_json = safe_serialize(input_data) if input_data is not None else None
+        output_json = safe_serialize(output_data) if output_data is not None else None
 
         return self.client.create_span(
             run_id=self.run_id,
@@ -81,8 +102,95 @@ class TraceRun:
             output_json=output_json,
             status=status,
             latency_ms=latency_ms,
-            error_message=error_message
-        )
+            error_message=error_message,
+            trace_id=self._meta.get("trace_id"),
+            host=self._meta.get("host"),
+            pid=self._meta.get("pid"),
+             meta_json=self._meta
 
-    def set_output(self, output_text: str):
-        self.output_text = output_text
+    def _collect_runtime_metadata(self) -> Dict[str, Any]:
+        meta = {
+            "trace_id": uuid.uuid4().hex,
+            "host": None,
+            "pid": None,
+            "timestamp": int(time.time() * 1000)
+        }
+        try:
+            meta["host"] = socket.gethostname()
+        except Exception:
+            meta["host"] = None
+
+        try:
+            meta["pid"] = os.getpid()
+        except Exception:
+            meta["pid"] = None
+
+        # try to include lightweight resource usage if available
+        try:
+            import psutil
+
+            p = psutil.Process()
+            with p.oneshot():
+                meta["cpu_percent"] = p.cpu_percent(interval=None)
+                mem = p.memory_info()
+                meta["rss_bytes"] = getattr(mem, "rss", None)
+                meta["vms_bytes"] = getattr(mem, "vms", None)
+        except Exception:
+            # psutil is optional; ignore if not installed
+            pass
+
+        return meta
+
+    def instrument(self, name: Optional[str] = None, span_type: str = "tool_call"):
+        """Return a decorator that auto-logs the wrapped function as a span.
+
+        Usage:
+            @run.instrument("lookup_order", span_type="tool_call")
+            def lookup_order(...):
+                ...
+        """
+        def decorator(fn):
+            span_name = name or fn.__name__
+
+            @functools.wraps(fn)
+            def wrapper(*args, **kwargs):
+                start = time.time()
+                input_data = {"args": args, "kwargs": kwargs}
+                try:
+                    result = fn(*args, **kwargs)
+                    latency_ms = int((time.time() - start) * 1000)
+                    try:
+                        output_data = {"result": result}
+                    except Exception:
+                        output_data = {"result_repr": repr(result)}
+
+                    self.log_span(
+                        span_type=span_type,
+                        name=span_name,
+                        input_data=input_data,
+                        output_data=output_data,
+                        status="success",
+                        latency_ms=latency_ms
+                    )
+                    return result
+                except Exception as e:
+                    latency_ms = int((time.time() - start) * 1000)
+                    err = {
+                        "type": type(e).__name__,
+                        "message": str(e),
+                        "traceback": traceback.format_exc()
+                    }
+                    self.log_span(
+                        span_type=span_type,
+                        name=span_name,
+                        input_data=input_data,
+                        output_data=None,
+                        status="error",
+                        latency_ms=latency_ms,
+                        error_message=str(e)
+                    )
+                    raise
+
+            return wrapper
+
+        return decorator

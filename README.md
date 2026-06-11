@@ -41,21 +41,37 @@ AgentWatch provides a compact end-to-end experience for building, testing, and r
 
 ## Quick Start
 
-### 1. Start Backend
+### Prerequisites
+
+- Python 3.11+
+- Node.js 18+
+- pip and npm
+
+### Step 1: Install SDK
+
+From the repository root, install the AgentWatch SDK locally:
+
+```bash
+cd sdk
+pip install -e .
+cd ..
+```
+
+### Step 2: Start Backend
 
 ```bash
 cd backend
 python -m venv venv
-source venv/bin/activate
+source venv/bin/activate  # On Windows: venv\Scripts\activate
 pip install -r requirements.txt
-uvicorn app.main:app --reload
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
 ```
 
-Backend URL: `http://127.0.0.1:8000`
+✅ Backend running at: `http://127.0.0.1:8001`
 
-Swagger docs: `http://127.0.0.1:8000/docs`
+Swagger docs: `http://127.0.0.1:8001/docs`
 
-### 2. Start Frontend
+### Step 3: Start Frontend (new terminal)
 
 ```bash
 cd frontend
@@ -63,24 +79,9 @@ npm install
 npm run dev
 ```
 
-Frontend URL: `http://localhost:5173`
+✅ Frontend running at: `http://127.0.0.1:5173`
 
-### 3. Install SDK Locally
-
-```bash
-cd sdk
-pip install -e .
-```
-
-### 4. Create a Project
-
-```bash
-curl -X POST http://127.0.0.1:8000/projects/ \
-  -H "Content-Type: application/json" \
-  -d '{"name":"refund-agent"}'
-```
-
-### 5. Run Demo Agent
+### Step 4: Run Demo Agent (new terminal)
 
 From the repository root:
 
@@ -88,12 +89,14 @@ From the repository root:
 python examples/refund_agent/demo.py
 ```
 
-This generates four demo runs:
+This creates four demo agent runs:
 
-- successful run
-- slow run
-- tool failure run
-- empty output run
+- ✅ **successful run** — completes successfully
+- ⚠️ **slow run** — takes >3 seconds (triggers latency warning)
+- ❌ **tool failure run** — tool call fails
+- ⚠️ **empty output run** — agent produces no output
+
+Each run is immediately visible in the dashboard with evaluation results and workflow visualization.
 
 ## SDK Example
 
@@ -130,52 +133,128 @@ with aw.trace(
     run.set_output("The customer may be eligible for a refund.")
 ```
 
-## Evaluation Logic
+## Key Features
 
-AgentWatch uses a rule-based evaluator for completed runs. Each run starts with a score of 100, and penalties are applied for issues detected during execution:
+### Workflow Visualization
 
-- Span error: -30
-- Tool failure: -25
-- Latency warning: -15
-- Empty output: -40
+The run detail page displays a **workflow diagram** showing:
+- Each span as an ordered workflow step
+- Error markers for failed steps
+- Persistent error highlighting for downstream steps after a failure
+- Error start/persistent error path indicators
 
-Evaluation labels are assigned as:
+### Automatic Evaluation
 
-- `pass`
-- `warning`
-- `fail`
+AgentWatch runs a rule-based evaluator on each completed run. Starting from a score of 100, penalties are applied:
 
-Current evaluator checks include:
+- Span error: -30 points
+- Tool failure: -25 points
+- Latency warning (>2 sec): -15 points
+- Empty output: -40 points
 
-- `has_error`
-- `tool_failure`
-- `latency_warning`
-- `empty_output`
+Final labels:
+- **pass** (score ≥ 80)
+- **warning** (score 50-79)
+- **fail** (score < 50)
 
-## API Examples
+### Metrics Tracked
 
-```bash
-curl http://127.0.0.1:8000/projects/
+- `has_error` — any span failed
+- `tool_failure` — tool/function call failed
+- `latency_warning` — run exceeded 2-second threshold
+- `empty_output` — agent produced no output
+
+## Instrumenting Your Agent
+
+### Basic Setup
+
+```python
+from agentwatch import AgentWatch
+
+# Initialize with your project API key
+aw = AgentWatch(
+    api_key="your-api-key",
+    project_id=1,
+    base_url="http://127.0.0.1:8001"  # Point to backend
+)
 ```
 
-```bash
-curl http://127.0.0.1:8000/runs/
+### Trace a Run
+
+```python
+with aw.trace(
+    run_name="my-agent-run",
+    input_text="User input here",
+    model="gpt-4"
+) as run:
+    # Log spans for each step
+    run.log_span(
+        span_type="llm_call",
+        name="step_name",
+        input_data={...},
+        output_data={...},
+        latency_ms=200
+    )
+    
+    # Set final output
+    run.set_output("Agent output")
 ```
 
+### Span Types
+
+- `llm_call` — LLM inference
+- `tool_call` — External function/API call
+- `error` — Error handling
+
+## API Endpoints
+
+### List Runs
 ```bash
-curl http://127.0.0.1:8000/runs/1
+curl http://127.0.0.1:8001/runs/
 ```
+
+### Get Run Details
+```bash
+curl http://127.0.0.1:8001/runs/1
+```
+
+### Create Project
+```bash
+curl -X POST http://127.0.0.1:8001/projects/ \
+  -H "Content-Type: application/json" \
+  -d '{"name":"my-project","retention_days":90}'
+```
+
+## Architecture
+
+### Backend (FastAPI)
+- RESTful API for creating runs, spans, and projects
+- SQLite database with SQLAlchemy ORM
+- Rule-based run evaluation service
+- API key authentication per project
+
+### Frontend (React + Vite)
+- Runs dashboard with filtering and sorting
+- Run detail page with workflow visualization
+- Real-time error highlighting
+- Automatic refresh support
+
+### SDK (Python)
+- `AgentWatch` client for API communication
+- `TraceRun` context manager for run lifecycle
+- Automatic host/PID/trace metadata capture
+- Async background batch sender for spans
 
 ## Roadmap
 
-- API key validation
-- Docker Compose setup
-- PostgreSQL support
+- Docker Compose setup for easy deployment
+- PostgreSQL support for scalability
 - LangChain / LangGraph integration
-- LLM-as-judge evaluations
-- Prompt/version tracking
+- LLM-as-judge evaluations (Claude, GPT-4)
+- Prompt versioning and tracking
 - Export traces to JSON/CSV
-- Hosted deployment
+- Webhook alerts for failed runs
+- Hosted deployment option
 
 ## License
 

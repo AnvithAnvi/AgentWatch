@@ -10,7 +10,11 @@ export default function RunDetailPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
-  const latestEvaluation = run?.evaluations?.[run.evaluations.length - 1] ?? null;
+  const runSpans = run?.spans || [];
+  const runEvaluations = run?.evaluations || [];
+  const errorIndex = runSpans.findIndex((span) => span.status === "error");
+  const hasPersistentError = errorIndex >= 0 && runSpans.length > errorIndex + 1;
+  const latestEvaluation = runEvaluations.length ? runEvaluations[runEvaluations.length - 1] : null;
 
   async function loadRun() {
     try {
@@ -113,6 +117,57 @@ export default function RunDetailPage() {
           </div>
         ) : (
           <p>No evaluation available for this run.</p>
+        )}
+      </div>
+
+      <div className="card">
+        <h2>Workflow</h2>
+
+        {runSpans.length === 0 ? (
+          <p>No workflow steps were recorded for this run.</p>
+        ) : (
+          <>
+            {hasPersistentError && (
+              <div className="error-summary">
+                Error started at step {errorIndex + 1} and persisted through downstream workflow steps.
+              </div>
+            )}
+
+            <div className="workflow-steps">
+              {runSpans.map((span, index) => {
+                const isError = span.status === "error";
+                const hasPersistent = errorIndex >= 0 && index > errorIndex;
+
+                return (
+                  <div
+                    key={span.id}
+                    className={`workflow-step ${isError ? "workflow-error" : hasPersistent ? "workflow-persistent" : ""}`}
+                  >
+                    <div className="workflow-index">{index + 1}</div>
+                    <div className="workflow-body">
+                      <div className="workflow-title">
+                        <strong>{span.name}</strong>
+                        <span className={`status ${span.status}`}>{span.status}</span>
+                      </div>
+
+                      <div className="workflow-meta">
+                        <span className="badge type-badge">{span.span_type}</span>
+                        {span.latency_ms && <span className="latency">{span.latency_ms} ms</span>}
+                        {isError && <span className="workflow-flag">Error start</span>}
+                        {!isError && hasPersistent && <span className="workflow-flag">Persistent error path</span>}
+                      </div>
+
+                      {span.error_message && (
+                        <div className="error-box">
+                          {span.error_message}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </>
         )}
       </div>
 
