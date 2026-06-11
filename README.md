@@ -20,16 +20,6 @@ AgentWatch provides a compact end-to-end experience for building, testing, and r
 - Rule-based pass / warning / fail evaluations
 - Demo refund agent with success, slow, tool-failure, and empty-output scenarios
 
-## Screenshots
-
-### Runs Dashboard
-
-![Runs Dashboard](screenshots/runs-list.png)
-
-### Run Detail
-
-![Run Detail](screenshots/run-detail.png)
-
 ## Tech Stack
 
 - Backend: FastAPI
@@ -39,7 +29,172 @@ AgentWatch provides a compact end-to-end experience for building, testing, and r
 - HTTP client: `requests`
 
 
-## Quick Start
+## How It Works
+
+AgentWatch provides end-to-end observability for AI agent execution with three main components working together:
+
+### 1. **Agent Instrumentation (SDK)**
+
+Your agent code uses the Python SDK to wrap execution within a **trace context**:
+
+```python
+from agentwatch import AgentWatch
+
+aw = AgentWatch(
+    api_key="your-api-key",
+    project_id=1,
+    base_url="http://127.0.0.1:8001"
+)
+
+with aw.trace(
+    run_name="refund-decision",
+    input_text="Customer request",
+    model="gpt-4"
+) as run:
+    # Your agent logic here
+    run.set_output("Final response")
+```
+
+When the context manager enters:
+- A **run** is created on the backend (start time, model, input captured)
+- Metadata is collected (host, process ID, trace ID for correlation)
+- Backend assigns a unique `run_id`
+
+### 2. **Span Logging During Execution**
+
+Inside the trace, log each step as a **span**:
+
+```python
+run.log_span(
+    span_type="llm_call",
+    name="intent_classification",
+    input_data={"text": "Can I get a refund?"},
+    output_data={"intent": "refund_request"},
+    latency_ms=250
+)
+
+run.log_span(
+    span_type="tool_call",
+    name="lookup_customer_order",
+    input_data={"customer_id": "C123"},
+    output_data={"order": {...}},
+    latency_ms=150
+)
+
+# If something fails, mark it as an error
+run.log_span(
+    span_type="tool_call",
+    name="process_refund",
+    status="error",
+    error_message="Payment gateway timeout",
+    latency_ms=5000
+)
+```
+
+Spans are sent **asynchronously** in batches to the backend:
+- Each span includes timing, inputs/outputs, status, and error details
+- Linked to the parent run by `run_id`
+- Timestamped for ordering in the dashboard
+
+### 3. **Run Completion & Evaluation**
+
+When the context manager exits:
+
+```python
+run.set_output("Final answer for the user")
+```
+
+The backend:
+- **Records completion** (end time, final output, overall status)
+- **Calculates latency** (elapsed time from start to finish)
+- **Runs evaluation logic** (see below)
+
+### 4. **Automatic Evaluation**
+
+AgentWatch evaluates completed runs against a scoring rubric:
+
+**Starting score: 100 points**
+
+Penalties applied automatically:
+- Any span with `status="error"`: **-30 points**
+- Span marked as tool failure: **-25 points**
+- Run latency > 2 seconds: **-15 points**
+- Empty or missing final output: **-40 points**
+
+**Final labels assigned:**
+- **pass** — score ≥ 80 (green) ✅
+- **warning** — score 50-79 (yellow) ⚠️
+- **fail** — score < 50 (red) ❌
+
+### 5. **Dashboard Visualization**
+
+The web dashboard displays:
+
+**Runs List:**
+- All runs in reverse chronological order
+- Status badge (success/running)
+- Latest evaluation (pass/warning/fail)
+- Model, latency, cost metadata
+- Quick links to detailed view
+
+**Run Detail Page:**
+- Input and output text
+- **Workflow visualization** showing:
+  - Each span as a numbered step in order
+  - Success/error markers on each step
+  - Error propagation highlighting (downstream steps after a failure highlighted in yellow)
+  - Latency for each span
+  - Error messages displayed inline
+- Full evaluation breakdown
+- All spans with input/output JSON
+
+### 6. **Data Flow Summary**
+
+```
+Your Agent Code (Python)
+    ↓
+    │ .trace() context manager starts
+    ↓
+SDK creates Run on Backend ← HTTP POST /runs/
+    ↓
+    │ Agent executes, logs spans
+    ├─ run.log_span(...) → queued locally
+    ├─ run.log_span(...) → queued locally
+    └─ async batch sends to backend ← HTTP POST /spans/ (batch)
+    ↓
+SDK calls run.set_output()
+    ↓
+Context exits → run completion signal ← HTTP PATCH /runs/{id}/complete
+    ↓
+Backend evaluates run (rule-based scoring)
+    ↓
+Dashboard fetches runs/details ← HTTP GET /runs/, /runs/{id}
+    ↓
+User views workflow, errors, and metrics in React UI
+```
+
+### 7. **Error Tracking Example**
+
+If a span fails:
+
+```python
+run.log_span(
+    span_type="tool_call",
+    name="verify_order",
+    status="error",
+    error_message="Database connection lost",
+    latency_ms=1200
+)
+```
+
+The dashboard will:
+1. Mark this span red (error indicator)
+2. Highlight all **subsequent spans in yellow** (persistent error path)
+3. Show the error message inline
+4. Reduce run score by 30 points
+5. Mark overall run as "fail" (if score < 50)
+6. Display workflow showing where failure originated and impact
+
 
 ### Prerequisites
 
@@ -81,22 +236,9 @@ npm run dev
 
 ✅ Frontend running at: `http://127.0.0.1:5173`
 
-### Step 4: Run Demo Agent (new terminal)
+### Step 4: Instrument Your Agent
 
-From the repository root:
-
-```bash
-python examples/refund_agent/demo.py
-```
-
-This creates four demo agent runs:
-
-- ✅ **successful run** — completes successfully
-- ⚠️ **slow run** — takes >3 seconds (triggers latency warning)
-- ❌ **tool failure run** — tool call fails
-- ⚠️ **empty output run** — agent produces no output
-
-Each run is immediately visible in the dashboard with evaluation results and workflow visualization.
+Now use the SDK in your agent code (see examples below).
 
 ## SDK Example
 
@@ -132,79 +274,6 @@ with aw.trace(
 
     run.set_output("The customer may be eligible for a refund.")
 ```
-
-## Key Features
-
-### Workflow Visualization
-
-The run detail page displays a **workflow diagram** showing:
-- Each span as an ordered workflow step
-- Error markers for failed steps
-- Persistent error highlighting for downstream steps after a failure
-- Error start/persistent error path indicators
-
-### Automatic Evaluation
-
-AgentWatch runs a rule-based evaluator on each completed run. Starting from a score of 100, penalties are applied:
-
-- Span error: -30 points
-- Tool failure: -25 points
-- Latency warning (>2 sec): -15 points
-- Empty output: -40 points
-
-Final labels:
-- **pass** (score ≥ 80)
-- **warning** (score 50-79)
-- **fail** (score < 50)
-
-### Metrics Tracked
-
-- `has_error` — any span failed
-- `tool_failure` — tool/function call failed
-- `latency_warning` — run exceeded 2-second threshold
-- `empty_output` — agent produced no output
-
-## Instrumenting Your Agent
-
-### Basic Setup
-
-```python
-from agentwatch import AgentWatch
-
-# Initialize with your project API key
-aw = AgentWatch(
-    api_key="your-api-key",
-    project_id=1,
-    base_url="http://127.0.0.1:8001"  # Point to backend
-)
-```
-
-### Trace a Run
-
-```python
-with aw.trace(
-    run_name="my-agent-run",
-    input_text="User input here",
-    model="gpt-4"
-) as run:
-    # Log spans for each step
-    run.log_span(
-        span_type="llm_call",
-        name="step_name",
-        input_data={...},
-        output_data={...},
-        latency_ms=200
-    )
-    
-    # Set final output
-    run.set_output("Agent output")
-```
-
-### Span Types
-
-- `llm_call` — LLM inference
-- `tool_call` — External function/API call
-- `error` — Error handling
 
 ## API Endpoints
 
