@@ -1,35 +1,665 @@
-# AgentWatch
+# AgentWatch — AI Agent Observability & Evaluation Dashboard
 
-## Overview
+A lightweight, end-to-end observability platform for AI agents. Monitor agent execution, capture runtime metadata, log execution steps, and automatically evaluate performance — all with a simple Python SDK and clean web dashboard.
 
-AgentWatch is a lightweight observability dashboard for AI agents that helps developers trace runs, inspect tool calls, detect failures, measure latency, and evaluate execution quality.
+**Perfect for:** developers building agentic systems who need visibility into execution, debugging tools, and quality metrics.
 
 ## Why AgentWatch?
 
-AgentWatch provides a compact end-to-end experience for building, testing, and reviewing agent workflows. It combines a FastAPI backend, Python SDK, React dashboard, and demo scenarios so teams can quickly demonstrate AI traceability and runtime quality checks.
+Building reliable AI agents requires observability. AgentWatch provides:
 
-## Features
+- **Complete Visibility** — See every step of agent execution, inputs, outputs, latency
+- **Automatic Quality Scoring** — Rule-based evaluation assigns pass/warning/fail status
+- **Error Tracking** — Track error propagation through execution steps
+- **Minimal Setup** — Wrap your agent in one context manager, add 1-2 lines per step
+- **No Configuration** — Works locally; zero deployment complexity
 
-- Python SDK for instrumenting agent workflows
-- FastAPI backend for collecting runs and spans
-- SQLite database with SQLAlchemy models
-- React + Vite dashboard
-- Run list with status, latency, and latest evaluation
-- Run detail page with input, output, spans, and evaluation
-- Span-level failure highlighting
-- Rule-based pass / warning / fail evaluations
-- Demo refund agent with success, slow, tool-failure, and empty-output scenarios
+## Key Features
+
+✅ **Python SDK** — Lightweight instrumentation with context managers  
+✅ **Real-time Dashboard** — Web UI for runs list, detailed workflows, error analysis  
+✅ **Automatic Metadata Capture** — Host, PID, trace IDs collected automatically  
+✅ **Error Propagation Tracking** — See which steps cascade failures downstream  
+✅ **Rule-Based Evaluation** — Pass/warning/fail scoring based on errors, latency, output  
+✅ **REST API** — Direct access to runs, spans, evaluations, projects  
+✅ **Local First** — SQLite backend; no external dependencies required  
 
 ## Tech Stack
 
-- Backend: FastAPI
-- Database: SQLite, SQLAlchemy
-- Frontend: React, Vite
-- SDK: Python
-- HTTP client: `requests`
+| Component | Technology |
+|-----------|-----------|
+| Backend   | FastAPI (Python 3.11+) |
+| Database  | SQLite + SQLAlchemy ORM |
+| Frontend  | React 19 + Vite 8 |
+| Backend   | FastAPI (Python 3.11+) |
+| Database  | SQLite + SQLAlchemy ORM |
+| Frontend  | React 19 + Vite 8 |
+| SDK       | Python `requests` library |
 
 
-## How It Works
+---
+
+## 🚀 Getting Started (5 Minutes)
+
+### Installation
+
+**Prerequisites:** Python 3.11+ and Node.js 18+
+
+#### 1. Clone & Install SDK
+
+```bash
+git clone https://github.com/AnvithAnvi/AgentWatch.git
+cd AgentWatch
+
+# Install Python SDK locally
+cd sdk
+pip install -e .
+cd ..
+```
+
+#### 2. Start Backend (Terminal A)
+
+```bash
+cd backend
+
+# Create and activate virtual environment
+python -m venv venv
+source venv/bin/activate  # Windows: venv\Scripts\activate
+
+# Install dependencies and start server
+pip install -r requirements.txt
+python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
+```
+
+**Expected output:**
+```
+INFO:     Uvicorn running on http://127.0.0.1:8001
+```
+
+Check health: Open `http://127.0.0.1:8001/docs` in your browser for API documentation.
+
+#### 3. Start Frontend (Terminal B)
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+**Expected output:**
+```
+VITE v8.x.x  ready in xxx ms
+
+➜  Local: http://127.0.0.1:5173/
+```
+
+Open `http://127.0.0.1:5173` in your browser.
+
+#### 4. Verify Everything Works
+
+In a new terminal, run:
+
+```python
+python3 << 'EOF'
+from agentwatch import AgentWatch
+
+# Test basic connectivity
+aw = AgentWatch(
+    api_key="test-key",
+    project_id=1,
+    base_url="http://127.0.0.1:8001"
+)
+
+with aw.trace(
+    run_name="hello-world",
+    input_text="Testing AgentWatch",
+    model="test"
+) as run:
+    run.log_span(
+        span_type="llm_call",
+        name="test_step",
+        input_data={"test": True},
+        output_data={"result": "success"},
+        latency_ms=100
+    )
+    run.set_output("Test completed successfully!")
+
+print("✅ AgentWatch is working!")
+EOF
+```
+
+Then check the dashboard at `http://127.0.0.1:5173` — you should see your test run!
+
+---
+
+## 📊 Using the Dashboard
+
+### Runs List Page
+
+The main dashboard shows all agent runs with key metrics:
+
+**Columns:**
+- **Run Name** — Identifier for the run
+- **Model** — LLM model used (e.g., "gpt-4", "claude-3")
+- **Status** — Current status (running/completed)
+- **Evaluation** — Pass ✅ / Warning ⚠️ / Fail ❌
+- **Latency** — Total execution time
+- **Input** — First 50 chars of input text
+- **Created** — When the run was created
+
+**Actions:**
+- Click any row to view detailed workflow
+- Runs appear in reverse chronological order (newest first)
+- Refresh shows latest runs immediately
+
+### Run Detail Page
+
+Shows complete execution trace with workflow visualization.
+
+**Sections:**
+
+#### 1. **Metadata Bar** (top)
+- Run name, status, creation time
+- Model and evaluation badge
+- Total latency and span count
+
+#### 2. **Input/Output Section**
+- Full input text (what was sent to agent)
+- Full output text (final result)
+- Useful for comparing expected vs. actual behavior
+
+#### 3. **Workflow Visualization** (center)
+Visual diagram of execution flow:
+
+```
+① intent_classification ✅ [250ms]
+   ↓
+② lookup_customer_order ✅ [150ms]
+   ↓
+③ process_refund ❌ [5000ms]  ← ERROR
+   Error: Payment gateway timeout
+   ↓
+④ fallback_notification ⚠️ [800ms]  ← PERSISTENT ERROR
+   (highlighted in yellow — impacted by upstream failure)
+```
+
+**Color meanings:**
+- 🟢 **Green** — Span completed successfully
+- 🔴 **Red** — Span failed with error
+- 🟡 **Yellow** — Span after an error (persistent failure path)
+
+#### 4. **Evaluation Breakdown**
+Shows scoring details:
+```
+Base Score: 100
+- Error penalty (span 3): -30
+- Latency penalty: -15
+Final Score: 55 → ⚠️ WARNING
+```
+
+#### 5. **Spans Table**
+Expandable list of all execution steps:
+- Span name and type (llm_call, tool_call, etc.)
+- Status (success/error)
+- Latency in milliseconds
+- Input/output JSON (click to expand)
+- Error message (if failed)
+
+---
+
+## 🛠️ SDK User Guide
+
+### Basic Setup
+
+Import and initialize AgentWatch:
+
+```python
+from agentwatch import AgentWatch
+
+# Initialize with your API key and backend URL
+aw = AgentWatch(
+    api_key="your-api-key",           # Can be any string for local testing
+    project_id=1,                      # Project ID from dashboard
+    base_url="http://127.0.0.1:8001"  # Backend URL
+)
+```
+
+### Creating Your First Run
+
+Wrap agent execution in a trace context manager:
+
+```python
+with aw.trace(
+    run_name="customer-support",       # Identifier for this run
+    input_text="I need help with...",  # User input
+    model="gpt-4"                       # Model name
+) as run:
+    # Your agent logic here
+    
+    # Log each step (see below)
+    run.log_span(...)
+    
+    # Set final output
+    run.set_output("Response to user")
+```
+
+**When you use `.trace()`:**
+- Backend creates a run record immediately
+- Metadata (host, PID, trace ID) is captured automatically
+- A unique `run_id` is assigned
+- Timer starts for latency measurement
+
+### Logging Execution Steps
+
+Log each step as a **span**:
+
+```python
+run.log_span(
+    span_type="llm_call",              # Type: llm_call, tool_call, or error
+    name="extract_intent",              # Step identifier
+    input_data={"text": "..."},         # What was sent to this step
+    output_data={"intent": "refund"},   # What this step returned
+    latency_ms=234,                     # How long it took
+    status="success"                    # Optional: success/error (default: success)
+)
+```
+
+**Span Types:**
+
+| Type | Use Case | Example |
+|------|----------|---------|
+| `llm_call` | LLM inference | ChatGPT, Claude, Ollama calls |
+| `tool_call` | External API/function | Database lookup, API request, file I/O |
+| `error` | Error handling logic | Retry logic, fallback handlers |
+
+### Handling Errors
+
+When a step fails, mark it as an error:
+
+```python
+try:
+    result = api.fetch_order(order_id)
+except ApiError as e:
+    run.log_span(
+        span_type="tool_call",
+        name="fetch_order",
+        input_data={"order_id": order_id},
+        output_data={},
+        status="error",                    # Mark as error
+        error_message=str(e),              # Error details
+        latency_ms=elapsed_time
+    )
+    # Continue with fallback logic...
+```
+
+**Dashboard Effect:**
+- Span marked red on workflow
+- All subsequent spans highlighted yellow (persistent error)
+- Run score reduced by 30 points
+- Run evaluation may become "fail" if score < 50
+
+### Complete Example: Simple Agent
+
+```python
+from agentwatch import AgentWatch
+import time
+
+aw = AgentWatch(
+    api_key="demo-key",
+    project_id=1,
+    base_url="http://127.0.0.1:8001"
+)
+
+def refund_agent(customer_id: str, reason: str):
+    """Determine if customer qualifies for refund."""
+    
+    with aw.trace(
+        run_name=f"refund-check-{customer_id}",
+        input_text=reason,
+        model="gpt-4"
+    ) as run:
+        
+        # Step 1: Classify refund request
+        start = time.time()
+        intent = classify_intent(reason)
+        run.log_span(
+            span_type="llm_call",
+            name="classify_request",
+            input_data={"reason": reason},
+            output_data={"intent": intent},
+            latency_ms=int((time.time() - start) * 1000)
+        )
+        
+        # Step 2: Look up customer order
+        start = time.time()
+        try:
+            order = lookup_order(customer_id)
+            run.log_span(
+                span_type="tool_call",
+                name="fetch_customer_order",
+                input_data={"customer_id": customer_id},
+                output_data={"order_id": order["id"], "status": order["status"]},
+                latency_ms=int((time.time() - start) * 1000)
+            )
+        except Exception as e:
+            run.log_span(
+                span_type="tool_call",
+                name="fetch_customer_order",
+                input_data={"customer_id": customer_id},
+                output_data={},
+                status="error",
+                error_message=str(e),
+                latency_ms=int((time.time() - start) * 1000)
+            )
+            run.set_output("Unable to fetch order. Please contact support.")
+            return
+        
+        # Step 3: Make refund decision
+        start = time.time()
+        decision = make_decision(order, intent)
+        run.log_span(
+            span_type="llm_call",
+            name="make_decision",
+            input_data={"order": order, "intent": intent},
+            output_data={"decision": decision},
+            latency_ms=int((time.time() - start) * 1000)
+        )
+        
+        # Set final output
+        run.set_output(f"Refund Decision: {decision}")
+        return decision
+
+# Usage
+refund_agent("CUST-123", "Item arrived damaged")
+```
+
+---
+
+## 📋 Common Use Cases
+
+### 1. LLM Chain Tracing
+
+Track multi-step LLM workflows:
+
+```python
+with aw.trace(run_name="research-synthesis", input_text=query, model="gpt-4") as run:
+    # Step 1: Retrieve relevant docs
+    docs = retrieve_documents(query)
+    
+    # Step 2: Summarize each document
+    for i, doc in enumerate(docs):
+        summary = llm.summarize(doc)
+        run.log_span(
+            span_type="llm_call",
+            name=f"summarize_doc_{i}",
+            input_data={"text": doc[:200]},
+            output_data={"summary": summary[:200]},
+            latency_ms=timing()
+        )
+    
+    # Step 3: Synthesize final answer
+    final_answer = llm.synthesize([...])
+    run.set_output(final_answer)
+```
+
+### 2. Tool-Use Agent (ReAct Pattern)
+
+Track agent reasoning loop:
+
+```python
+with aw.trace(run_name="react-agent", input_text=goal, model="gpt-4") as run:
+    for step_num in range(max_steps):
+        # Reasoning
+        thought, action = agent.think(history)
+        
+        # Tool use
+        result = use_tool(action)
+        run.log_span(
+            span_type="tool_call",
+            name=f"tool_step_{step_num}",
+            input_data={"action": action},
+            output_data={"result": result},
+            latency_ms=elapsed
+        )
+        
+        if is_final(result):
+            run.set_output(result)
+            break
+```
+
+### 3. Agentic RAG
+
+Track retrieval and generation:
+
+```python
+with aw.trace(run_name="rag-query", input_text=question, model="claude-3") as run:
+    # Retrieval
+    start = time.time()
+    chunks = vector_db.search(question, top_k=5)
+    retrieval_time = time.time() - start
+    
+    run.log_span(
+        span_type="tool_call",
+        name="vector_search",
+        input_data={"query": question, "top_k": 5},
+        output_data={"chunks_retrieved": len(chunks)},
+        latency_ms=int(retrieval_time * 1000)
+    )
+    
+    # Generation
+    start = time.time()
+    answer = llm.generate(question, chunks)
+    generation_time = time.time() - start
+    
+    run.log_span(
+        span_type="llm_call",
+        name="generate_answer",
+        input_data={"context": "..."},
+        output_data={"answer": answer[:200]},
+        latency_ms=int(generation_time * 1000)
+    )
+    
+    run.set_output(answer)
+```
+
+---
+
+## ❓ Troubleshooting & FAQ
+
+### Q: Backend won't start — "Address already in use"
+**A:** Another process is using port 8001.
+```bash
+# Find what's using port 8001
+lsof -i :8001
+
+# Kill the process
+kill -9 <PID>
+
+# Or use a different port
+python -m uvicorn app.main:app --host 127.0.0.1 --port 8002
+```
+
+### Q: Frontend can't connect to backend
+**A:** Check that backend is running and CORS is enabled.
+```bash
+# Verify backend health
+curl http://127.0.0.1:8001/docs
+
+# Check frontend environment
+cat frontend/.env
+```
+
+### Q: Spans not appearing in dashboard
+**A:** Verify the run is completed (context manager exited).
+```python
+with aw.trace(...) as run:
+    run.log_span(...)
+# Spans sent when exiting context manager
+```
+
+### Q: SDK gives "Connection refused"
+**A:** Backend URL is incorrect or backend isn't running.
+```python
+# Verify correct URL and port
+aw = AgentWatch(
+    api_key="test-key",
+    project_id=1,
+    base_url="http://127.0.0.1:8001"  # Not 8000!
+)
+```
+
+### Q: Evaluations seem wrong — my successful run shows "fail"
+**A:** Check penalties applied:
+- Error span: -30 points
+- Latency > 2s: -15 points
+- Empty output: -40 points
+- Score < 50: marked "fail"
+
+See run details to view breakdown.
+
+### Q: Can I use AgentWatch in production?
+**A:** Currently local-only (SQLite). Upcoming features: PostgreSQL, containerization, hosted option. For production, consider exporting runs to persistent storage.
+
+---
+
+## 💡 Best Practices
+
+### 1. Granular Span Names
+❌ Bad: `run.log_span(span_type="llm_call", name="step1")`  
+✅ Good: `run.log_span(span_type="llm_call", name="classify_sentiment")`
+
+Clear names make workflows easier to understand in the dashboard.
+
+### 2. Include Relevant Context in I/O
+```python
+run.log_span(
+    span_type="llm_call",
+    name="summarize_document",
+    input_data={
+        "doc_id": doc.id,
+        "text_preview": doc.text[:200],
+        "language": doc.language
+    },
+    output_data={
+        "summary": summary,
+        "confidence": confidence_score
+    },
+    latency_ms=elapsed
+)
+```
+
+This helps debugging without re-running the agent.
+
+### 3. Always Set Final Output
+```python
+run.set_output("Your agent's final response")
+```
+
+Missing output penalizes evaluation score by 40 points.
+
+### 4. Measure Latency Accurately
+```python
+import time
+start = time.time()
+result = expensive_operation()
+latency_ms = int((time.time() - start) * 1000)
+
+run.log_span(..., latency_ms=latency_ms)
+```
+
+### 5. Mark Errors Explicitly
+```python
+try:
+    result = risky_operation()
+except Exception as e:
+    run.log_span(
+        ...,
+        status="error",
+        error_message=str(e)
+    )
+```
+
+This helps identify failure patterns.
+
+---
+
+## 🔌 API Reference
+
+All operations via HTTP. Authentication: Bearer token in `Authorization` header.
+
+### List Runs
+```bash
+GET http://127.0.0.1:8001/runs/
+
+# Response
+[
+  {
+    "id": 1,
+    "project_id": 1,
+    "run_name": "refund-check",
+    "model": "gpt-4",
+    "status": "completed",
+    "evaluation": "pass",
+    "latency_ms": 1234,
+    "created_at": "2025-01-15T10:30:00Z"
+  }
+]
+```
+
+### Get Run Details
+```bash
+GET http://127.0.0.1:8001/runs/1
+
+# Response
+{
+  "id": 1,
+  "run_name": "refund-check",
+  "input_text": "I need a refund",
+  "output_text": "Refund approved",
+  "evaluation": {
+    "score": 85,
+    "label": "pass",
+    "has_error": false,
+    "tool_failure": false,
+    "latency_warning": false,
+    "empty_output": false
+  },
+  "spans": [
+    {
+      "id": 1,
+      "span_type": "llm_call",
+      "name": "classify_intent",
+      "status": "success",
+      "latency_ms": 250,
+      "input_data": {...},
+      "output_data": {...}
+    }
+  ]
+}
+```
+
+### Create Project
+```bash
+POST http://127.0.0.1:8001/projects/
+Content-Type: application/json
+
+{
+  "name": "my-project",
+  "retention_days": 90
+}
+
+# Response
+{
+  "id": 1,
+  "name": "my-project",
+  "api_key": "proj_xxx...",
+  "retention_days": 90
+}
+```
+
+---
+
+## 🏗️ How It Works (Technical Deep Dive)
 
 AgentWatch provides end-to-end observability for AI agent execution with three main components working together:
 
@@ -195,106 +825,9 @@ The dashboard will:
 5. Mark overall run as "fail" (if score < 50)
 6. Display workflow showing where failure originated and impact
 
+---
 
-### Prerequisites
-
-- Python 3.11+
-- Node.js 18+
-- pip and npm
-
-### Step 1: Install SDK
-
-From the repository root, install the AgentWatch SDK locally:
-
-```bash
-cd sdk
-pip install -e .
-cd ..
-```
-
-### Step 2: Start Backend
-
-```bash
-cd backend
-python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
-pip install -r requirements.txt
-python -m uvicorn app.main:app --reload --host 127.0.0.1 --port 8001
-```
-
-✅ Backend running at: `http://127.0.0.1:8001`
-
-Swagger docs: `http://127.0.0.1:8001/docs`
-
-### Step 3: Start Frontend (new terminal)
-
-```bash
-cd frontend
-npm install
-npm run dev
-```
-
-✅ Frontend running at: `http://127.0.0.1:5173`
-
-### Step 4: Instrument Your Agent
-
-Now use the SDK in your agent code (see examples below).
-
-## SDK Example
-
-```python
-from agentwatch import AgentWatch
-
-aw = AgentWatch(
-    api_key="demo-key",
-    project_id=1,
-    base_url="http://127.0.0.1:8000"
-)
-
-with aw.trace(
-    run_name="refund-agent-test",
-    input_text="Can I get a refund?",
-    model="fake-llm-v1"
-) as run:
-    run.log_span(
-        span_type="llm_call",
-        name="classify_intent",
-        input_data={"message": "Can I get a refund?"},
-        output_data={"intent": "refund_request"},
-        latency_ms=120
-    )
-
-    run.log_span(
-        span_type="tool_call",
-        name="lookup_order",
-        input_data={"order_id": "ORD-123"},
-        output_data={"status": "delivered"},
-        latency_ms=80
-    )
-
-    run.set_output("The customer may be eligible for a refund.")
-```
-
-## API Endpoints
-
-### List Runs
-```bash
-curl http://127.0.0.1:8001/runs/
-```
-
-### Get Run Details
-```bash
-curl http://127.0.0.1:8001/runs/1
-```
-
-### Create Project
-```bash
-curl -X POST http://127.0.0.1:8001/projects/ \
-  -H "Content-Type: application/json" \
-  -d '{"name":"my-project","retention_days":90}'
-```
-
-## Architecture
+## 🏛️ Architecture
 
 ### Backend (FastAPI)
 - RESTful API for creating runs, spans, and projects
